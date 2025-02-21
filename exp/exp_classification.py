@@ -37,7 +37,14 @@ class Exp_Classification(Exp_Basic):
 
     def _select_optimizer(self):
         # model_optim = optim.Adam(self.model.parameters(), lr=self.args.learning_rate)
-        model_optim = optim.RAdam(self.model.parameters(), lr=self.args.learning_rate)
+        # model_optim = optim.RAdam(self.model.parameters(), lr=self.args.learning_rate)
+        try:
+            import torch_optimizer as optim_extra
+            RAdam = optim_extra.RAdam
+        except ImportError:
+            print("torch_optimizer not found, using Adam instead")
+            RAdam = optim.Adam
+        model_optim = RAdam(self.model.parameters(), lr=self.args.learning_rate)
         return model_optim
 
     def _select_criterion(self):
