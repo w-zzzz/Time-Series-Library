@@ -746,3 +746,131 @@ class UEAloader(Dataset):
 
     def __len__(self):
         return len(self.all_IDs)
+
+
+
+class OSALoader(Dataset):
+    """
+    Dataset class for OSA (Obstructive Sleep Apnea) classification
+    
+    Attributes:
+        all_df: DataFrame containing all features
+        feature_df: DataFrame containing only the feature columns
+        labels_df: DataFrame containing encoded labels
+        all_IDs: unique sample IDs
+        feature_names: names of the signal channels
+        class_names: names of the event categories
+    """
+    
+    def __init__(self, args, root_path, flag=None):
+        self.args = args
+        self.root_path = root_path
+        self.data_path = ''
+        self.flag = flag
+        
+        # Find appropriate CSV file based on flag
+        if flag == 'TRAIN':
+            csv_pattern = os.path.join(self.root_path, '*TRAIN*.csv')
+            csv_files = glob.glob(csv_pattern)
+            self.data_path = csv_files[0]  # Use the first matching file
+        elif flag == 'TEST':
+            csv_pattern = os.path.join(self.root_path, '*TEST*.csv')
+            csv_files = glob.glob(csv_pattern)
+            self.data_path = csv_files[0]  # Use the first matching file
+            
+        # Load and preprocess data
+        self.all_df, self.labels_df = self.load_data(flag=flag)
+        self.all_IDs = self.all_df.index.unique()  # unique sample IDs
+        
+        # Get feature names (excluding 'Unnamed: 0' and 'label')
+        self.feature_names = ['breath', 'ECG', 'Thor', 'Abdo', 'SpO2', 'Airflow']
+        self.feature_df = self.all_df[self.feature_names]
+        
+        # Normalize features
+        self.scaler = StandardScaler()
+        self.feature_df = pd.DataFrame(
+            self.scaler.fit_transform(self.feature_df),
+            columns=self.feature_names,
+            index=self.feature_df.index
+        )
+        
+        print(f"Loaded {len(self.all_IDs)} samples")
+        print(f"Features: {self.feature_names}")
+        print(f"Number of classes: {len(self.class_names)}")
+
+    def load_data(self, flag=None):
+        """
+        Load and preprocess the OSA dataset with train/val/test split
+        """
+        # Read the CSV file
+        df = pd.read_csv(os.path.join(self.root_path, self.data_path))
+        
+        # Convert labels to categorical codes
+        labels = pd.Series(df['label'], dtype="category")
+        self.class_names = labels.cat.categories
+        labels_df = pd.DataFrame(labels.cat.codes, dtype=np.int8)
+        
+        # Drop unnecessary columns and set index
+        df = df.drop(['Unnamed: 0', 'label'], axis=1)
+        df.index = range(len(df))
+
+        # First create a (seq_len, feat_dim) dataframe for each sample, indexed by a single integer ("ID" of the sample)
+        # Then concatenate into a (num_samples * seq_len, feat_dim) dataframe, with multiple rows corresponding to the
+        # sample index (i.e. the same scheme as all datasets in this project)
+
+        
+        # Convert string representations of lists to float arrays
+        for col in df.columns:
+            df[col] = df[col].apply(lambda x: np.array([float(val) for val in x.strip('[]').split()]))
+
+        lengths = df.applymap(lambda x: len(x)).values
+        self.max_seq_len = lengths[0, 0]
+        
+        df = pd.concat((pd.DataFrame({col: df.loc[row, col] for col in df.columns}).reset_index(drop=True).set_index(
+            pd.Series(lengths[row, 0] * [row])) for row in range(df.shape[0])), axis=0)
+
+        # # Replace NaN values
+        # grp = df.groupby(by=df.index)
+        # df = grp.transform(interpolate_missing)
+            
+        return df, labels_df
+
+    def __getitem__(self, ind):
+        """
+        Get a single sample and its label
+        Returns:
+            batch_x: (seq_len, num_features) tensor of features
+            labels: (1,) tensor of class label
+        """
+        # Get features for this sample
+        features = self.feature_df.loc[self.all_IDs[ind]].values
+        labels = self.labels_df.loc[self.all_IDs[ind]].values
+        
+        # Convert to tensors
+        batch_x = torch.from_numpy(features)
+        
+        # # Reshape if needed - assuming each sample is a sequence
+        # if len(batch_x.shape) == 1:
+        #     batch_x = batch_x.unsqueeze(0)  # Add sequence dimension if single timestep
+            
+        # # Apply instance normalization if needed
+        # batch_x = self.instance_norm(batch_x)
+        
+        return batch_x, torch.from_numpy(labels)
+
+    def __len__(self):
+        """
+        Return the total number of samples
+        """
+        return len(self.all_IDs)
+    
+    # def instance_norm(self, x):
+    #     """
+    #     Apply instance normalization to input tensor
+    #     """
+    #     mean = x.mean(0, keepdim=True)
+    #     x = x - mean
+    #     std = torch.sqrt(torch.var(x, dim=0, keepdim=True, unbiased=False) + 1e-5)
+    #     x = x / std
+    #     return x
+
