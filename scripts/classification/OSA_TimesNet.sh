@@ -36,4 +36,4 @@ python -u run.py \
   # --train_epochs 30 \
   # --patience 10
 
-  python -u run.py --task_name classification --is_training 1 --root_path /Time-Series-Library --model_id OSA_classification --model TimesNet --data OSA --e_layers 3 --batch_size 32 --d_model 64 --d_ff 128 --top_k 3 --des 'Exp_OSA_classification' --itr 1 --learning_rate 0.001 --train_epochs 50 --patience 10
+  # python -u run.py --task_name classification --is_training 1 --root_path /Time-Series-Library --model_id OSA_classification --model TimesNet --data OSA --e_layers 3 --batch_size 32 --d_model 64 --d_ff 128 --top_k 3 --des 'Exp_OSA_classification' --itr 1 --learning_rate 0.001 --train_epochs 50 --patience 10
