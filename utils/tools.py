@@ -118,3 +118,85 @@ def adjustment(gt, pred):
 
 def cal_accuracy(y_pred, y_true):
     return np.mean(y_pred == y_true)
+
+
+def cal_sensitivity_specificity(y_pred, y_true, average='macro'):
+    """
+    Calculate both sensitivity (recall) and specificity for classification
+    Handles both binary and multi-class cases automatically.
+    
+    Args:
+        y_pred: predicted labels (1D array of class indices)
+        y_true: true labels (1D array of class indices)
+        average: 'macro' for unweighted mean, 'weighted' for weighted by support
+    Returns:
+        tuple: (sensitivity score, specificity score)
+    """
+    # Get unique classes and check if binary or multi-class
+    classes = np.unique(np.concatenate((y_true, y_pred)))
+    n_classes = len(classes)
+    is_binary = n_classes == 2
+    
+    if is_binary:
+        # For binary case, calculate metrics directly
+        positive_class = classes[1]  # conventionally the larger number is positive class
+        
+        # Calculate confusion matrix elements
+        tp = np.sum((y_true == positive_class) & (y_pred == positive_class))
+        tn = np.sum((y_true != positive_class) & (y_pred != positive_class))
+        fp = np.sum((y_true != positive_class) & (y_pred == positive_class))
+        fn = np.sum((y_true == positive_class) & (y_pred != positive_class))
+        
+        # Calculate metrics
+        sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+        specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+        
+        return sensitivity, specificity
+    
+    else:
+        # For multi-class case, calculate per-class metrics
+        sensitivities = []
+        specificities = []
+        sensitivity_supports = []
+        specificity_supports = []
+        
+        for c in classes:
+            # True positives: predicted class c when true class is c
+            tp = np.sum((y_true == c) & (y_pred == c))
+            # False negatives: predicted not c when true class is c
+            fn = np.sum((y_true == c) & (y_pred != c))
+            # True negatives: predicted not c when true class is not c
+            tn = np.sum((y_true != c) & (y_pred != c))
+            # False positives: predicted c when true class is not c
+            fp = np.sum((y_true != c) & (y_pred == c))
+            
+            # Sensitivity = TP / (TP + FN)
+            if tp + fn > 0:
+                sensitivity = tp / (tp + fn)
+                sensitivities.append(sensitivity)
+                sensitivity_supports.append(tp + fn)
+            else:
+                sensitivities.append(0)
+                sensitivity_supports.append(0)
+            
+            # Specificity = TN / (TN + FP)
+            if tn + fp > 0:
+                specificity = tn / (tn + fp)
+                specificities.append(specificity)
+                specificity_supports.append(tn + fp)
+            else:
+                specificities.append(0)
+                specificity_supports.append(0)
+        
+        # Calculate final scores based on averaging method
+        if average == 'macro':
+            final_sensitivity = np.mean(sensitivities)
+            final_specificity = np.mean(specificities)
+        elif average == 'weighted':
+            final_sensitivity = np.average(sensitivities, weights=sensitivity_supports)
+            final_specificity = np.average(specificities, weights=specificity_supports)
+        else:
+            final_sensitivity = np.array(sensitivities)
+            final_specificity = np.array(specificities)
+        
+        return final_sensitivity, final_specificity

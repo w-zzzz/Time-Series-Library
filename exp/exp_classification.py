@@ -1,6 +1,6 @@
 from data_provider.data_factory import data_provider
 from exp.exp_basic import Exp_Basic
-from utils.tools import EarlyStopping, adjust_learning_rate, cal_accuracy
+from utils.tools import EarlyStopping, adjust_learning_rate, cal_accuracy, cal_sensitivity_specificity
 import torch
 import torch.nn as nn
 from torch import optim
@@ -78,15 +78,18 @@ class Exp_Classification(Exp_Basic):
         probs = torch.nn.functional.softmax(preds)  # (total_samples, num_classes) est. prob. for each class and sample
         predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
         trues = trues.flatten().cpu().numpy()
+        
+        # Calculate all metrics
         accuracy = cal_accuracy(predictions, trues)
+        sensitivity, specificity = cal_sensitivity_specificity(predictions, trues, average='macro')
 
         self.model.train()
-        return total_loss, accuracy
+        return total_loss, accuracy, sensitivity, specificity
 
     def train(self, setting):
         train_data, train_loader = self._get_data(flag='TRAIN')
         vali_data, vali_loader = self._get_data(flag='TEST')
-        test_data, test_loader = self._get_data(flag='TEST')
+        # test_data, test_loader = self._get_data(flag='TEST')
 
         path = os.path.join(self.args.checkpoints, setting)
         if not os.path.exists(path):
@@ -133,12 +136,12 @@ class Exp_Classification(Exp_Basic):
 
             print("Epoch: {} cost time: {}".format(epoch + 1, time.time() - epoch_time))
             train_loss = np.average(train_loss)
-            vali_loss, val_accuracy = self.vali(vali_data, vali_loader, criterion)
-            test_loss, test_accuracy = self.vali(test_data, test_loader, criterion)
+            vali_loss, val_accuracy, val_sensitivity, val_specificity = self.vali(vali_data, vali_loader, criterion)
+            # test_loss, test_accuracy, test_sensitivity, test_specificity = self.vali(test_data, test_loader, criterion)
 
             print(
-                "Epoch: {0}, Steps: {1} | Train Loss: {2:.3f} Vali Loss: {3:.3f} Vali Acc: {4:.3f} Test Loss: {5:.3f} Test Acc: {6:.3f}"
-                .format(epoch + 1, train_steps, train_loss, vali_loss, val_accuracy, test_loss, test_accuracy))
+                "Epoch: {0}, Steps: {1} | Train Loss: {2:.3f} Vali Loss: {3:.3f} Vali Acc: {4:.3f} Vali Sens: {5:.3f} Vali Spec: {6:.3f}"
+                .format(epoch + 1, train_steps, train_loss, vali_loss, val_accuracy, val_sensitivity, val_specificity))
             early_stopping(-val_accuracy, self.model, path)
             if early_stopping.early_stop:
                 print("Early stopping")
