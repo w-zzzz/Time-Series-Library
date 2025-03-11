@@ -770,11 +770,11 @@ class OSALoader(Dataset):
         
         # Find appropriate CSV file based on flag
         if flag == 'TRAIN':
-            csv_pattern = os.path.join(self.root_path, '*TRAIN*.csv')
+            csv_pattern = os.path.join(self.root_path, '*TRAIN*.h5')
             csv_files = glob.glob(csv_pattern)
             self.data_path = csv_files[0]  # Use the first matching file
         elif flag == 'TEST':
-            csv_pattern = os.path.join(self.root_path, '*TEST*.csv')
+            csv_pattern = os.path.join(self.root_path, '*TEST*.h5')
             csv_files = glob.glob(csv_pattern)
             self.data_path = csv_files[0]  # Use the first matching file
             
@@ -803,15 +803,16 @@ class OSALoader(Dataset):
         Load and preprocess the OSA dataset with train/val/test split
         """
         # Read the CSV file
-        df = pd.read_csv(os.path.join(self.root_path, self.data_path))
+        df = pd.read_hdf(os.path.join(self.root_path, self.data_path), key='data')
         
         # Convert labels to categorical codes
         labels = pd.Series(df['label'], dtype="category")
         self.class_names = labels.cat.categories
         labels_df = pd.DataFrame(labels.cat.codes, dtype=np.int8)
+        labels_df.index = range(len(labels_df))
         
         # Drop unnecessary columns and set index
-        df = df.drop(['Unnamed: 0', 'label'], axis=1)
+        df = df.drop(['label'], axis=1)
         df.index = range(len(df))
 
         # First create a (seq_len, feat_dim) dataframe for each sample, indexed by a single integer ("ID" of the sample)
@@ -819,9 +820,9 @@ class OSALoader(Dataset):
         # sample index (i.e. the same scheme as all datasets in this project)
 
         
-        # Convert string representations of lists to float arrays
-        for col in df.columns:
-            df[col] = df[col].apply(lambda x: np.array([float(val) for val in x.strip('[]').split()]))
+        # # Convert string representations of lists to float arrays
+        # for col in df.columns:
+        #     df[col] = df[col].apply(lambda x: np.array([float(val) for val in x.strip('[]').split()]))
 
         lengths = df.applymap(lambda x: len(x)).values
         self.max_seq_len = lengths[0, 0]
