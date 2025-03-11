@@ -170,3 +170,4 @@ environment.txt
 
 *.pkl
 *.csv
+*.h5
