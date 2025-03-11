@@ -48,7 +48,7 @@ class Exp_Classification(Exp_Basic):
         return model_optim
 
     def _select_criterion(self):
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(weight=torch.tensor([1.0, 10.0])).to(self.device)
         return criterion
 
     def vali(self, vali_data, vali_loader, criterion):
@@ -64,9 +64,9 @@ class Exp_Classification(Exp_Basic):
 
                 outputs = self.model(batch_x, padding_mask, None, None)
 
-                pred = outputs.detach().cpu()
-                loss = criterion(pred, label.long().squeeze().cpu())
-                total_loss.append(loss)
+                pred = outputs.detach()
+                loss = criterion(pred, label.long().squeeze())
+                total_loss.append(loss.item())
 
                 preds.append(outputs.detach())
                 trues.append(label)
@@ -117,6 +117,7 @@ class Exp_Classification(Exp_Basic):
                 batch_x = batch_x.float().to(self.device)
                 padding_mask = padding_mask.float().to(self.device)
                 label = label.to(self.device)
+                weight = torch.tensor([1, 5]).to(self.device)
 
                 outputs = self.model(batch_x, padding_mask, None, None)
                 loss = criterion(outputs, label.long().squeeze(-1))
@@ -142,7 +143,7 @@ class Exp_Classification(Exp_Basic):
             print(
                 "Epoch: {0}, Steps: {1} | Train Loss: {2:.3f} Vali Loss: {3:.3f} Vali Acc: {4:.3f} Vali Sens: {5:.3f} Vali Spec: {6:.3f}"
                 .format(epoch + 1, train_steps, train_loss, vali_loss, val_accuracy, val_sensitivity, val_specificity))
-            early_stopping(-val_accuracy, self.model, path)
+            early_stopping(-val_sensitivity, self.model, path)
             if early_stopping.early_stop:
                 print("Early stopping")
                 break
@@ -184,18 +185,17 @@ class Exp_Classification(Exp_Basic):
         predictions = torch.argmax(probs, dim=1).cpu().numpy()  # (total_samples,) int class index for each sample
         trues = trues.flatten().cpu().numpy()
         accuracy = cal_accuracy(predictions, trues)
+        sensitivity, specificity = cal_sensitivity_specificity(predictions, trues, average='macro')
 
         # result save
         folder_path = './results/' + setting + '/'
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
 
-        print('accuracy:{}'.format(accuracy))
+        print('accuracy: {}, sensitivity: {}, specificity: {}'.format(accuracy, sensitivity, specificity))
         file_name='result_classification.txt'
         f = open(os.path.join(folder_path,file_name), 'a')
         f.write(setting + "  \n")
-        f.write('accuracy:{}'.format(accuracy))
-        f.write('\n')
-        f.write('\n')
+        f.write('accuracy: {}, sensitivity: {}, specificity: {}\n\n'.format(accuracy, sensitivity, specificity))
         f.close()
         return
